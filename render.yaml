@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: mortgage-ai-planner
+    env: node
+    region: singapore
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false
