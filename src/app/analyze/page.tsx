@@ -19,8 +19,10 @@ export default function AnalyzePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<YoutubeAnalysis | null>(null);
+  const [needsManualTranscript, setNeedsManualTranscript] = useState(false);
+  const [manualTranscript, setManualTranscript] = useState("");
 
-  const handleAnalyze = async () => {
+  const handleAnalyze = async (transcriptOverride?: string) => {
     if (!url.trim()) {
       setError("유튜브 URL을 입력해주세요.");
       return;
@@ -33,22 +35,37 @@ export default function AnalyzePage() {
       const res = await fetch("/api/analyze-youtube", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({
+          url,
+          ...(transcriptOverride ? { manualTranscript: transcriptOverride } : {}),
+        }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
         setError(data.error || "분석 중 오류가 발생했습니다.");
+        if (data.needsManualTranscript) {
+          setNeedsManualTranscript(true);
+        }
         return;
       }
 
+      setNeedsManualTranscript(false);
       setResult(data);
     } catch {
       setError("네트워크 오류가 발생했습니다. 다시 시도해주세요.");
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleManualSubmit = () => {
+    if (!manualTranscript.trim()) {
+      setError("자막 텍스트를 입력해주세요.");
+      return;
+    }
+    handleAnalyze(manualTranscript);
   };
 
   return (
@@ -73,12 +90,13 @@ export default function AnalyzePage() {
                 onChange={(e) => {
                   setUrl(e.target.value);
                   setError("");
+                  setNeedsManualTranscript(false);
                 }}
                 onKeyDown={(e) => e.key === "Enter" && handleAnalyze()}
                 error={error}
               />
             </div>
-            <Button onClick={handleAnalyze} disabled={isLoading} size="default" className="shrink-0">
+            <Button onClick={() => handleAnalyze()} disabled={isLoading} size="default" className="shrink-0">
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
@@ -98,6 +116,30 @@ export default function AnalyzePage() {
           <p className="mt-3 text-xs text-gray-400">
             * 자막이 있는 유튜브 영상만 분석 가능합니다. 영상 길이가 길수록 분석에 시간이 걸릴 수 있습니다.
           </p>
+
+          {needsManualTranscript && (
+            <div className="mt-4 border-t border-gray-100 pt-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-1">자막 직접 입력</h3>
+              <p className="text-xs text-gray-500 mb-2">
+                유튜브 영상의 &quot;스크립트 표시&quot; 기능으로 자막 전체를 복사한 뒤 아래에 붙여넣어 주세요.
+              </p>
+              <textarea
+                className="w-full min-h-[160px] rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="여기에 자막 텍스트를 붙여넣으세요..."
+                value={manualTranscript}
+                onChange={(e) => setManualTranscript(e.target.value)}
+              />
+              <Button
+                onClick={handleManualSubmit}
+                disabled={isLoading}
+                size="default"
+                className="mt-3"
+              >
+                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                <span className="ml-2">{isLoading ? "분석 중..." : "이 자막으로 분석하기"}</span>
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 

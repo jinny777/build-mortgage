@@ -10,6 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Calculator } from "lucide-react";
 import { formatCurrency, formatPercent, calculateMonthlyPayment } from "@/lib/utils";
 import type { LoanAnalysis, LoanProfile, SimulationResult } from "@/types";
 
@@ -104,6 +107,115 @@ function SimulationTable({ loanAmount, rate }: { loanAmount: number; rate: numbe
         </tbody>
       </table>
     </div>
+  );
+}
+
+const METHOD_OPTIONS = [
+  { value: "equal-principal-interest", label: "원리금균등상환" },
+  { value: "equal-principal", label: "원금균등상환" },
+  { value: "bullet", label: "만기일시상환" },
+];
+
+const YEAR_OPTIONS = [10, 15, 20, 30, 40].map((y) => ({ value: String(y), label: `${y}년` }));
+
+function LoanSimulator({ defaultLoanAmount, defaultRate }: { defaultLoanAmount: number; defaultRate: number }) {
+  const [amountMan, setAmountMan] = useState(String(Math.round(defaultLoanAmount / 10000)));
+  const [rate, setRate] = useState(String(defaultRate.toFixed(2)));
+  const [years, setYears] = useState("30");
+  const [method, setMethod] = useState<"equal-principal-interest" | "equal-principal" | "bullet">(
+    "equal-principal-interest"
+  );
+
+  const loanAmount = (Number(amountMan) || 0) * 10000;
+  const rateNum = Number(rate) || 0;
+  const yearsNum = Number(years);
+
+  const monthlyPayment = calculateMonthlyPayment(loanAmount, rateNum, yearsNum, method);
+
+  let totalPayment: number;
+  if (method === "bullet") {
+    totalPayment = monthlyPayment * yearsNum * 12 + loanAmount;
+  } else if (method === "equal-principal") {
+    const principalPayment = loanAmount / (yearsNum * 12);
+    totalPayment =
+      loanAmount +
+      principalPayment * ((yearsNum * 12 + 1) / 2) * (rateNum / 100 / 12) * (yearsNum * 12);
+  } else {
+    totalPayment = monthlyPayment * yearsNum * 12;
+  }
+  const totalInterest = totalPayment - loanAmount;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Calculator className="w-5 h-5 text-blue-600" />
+          나만의 대출 시뮬레이션
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <p className="text-sm text-gray-500 mb-4">
+          대출금액, 금리, 상환기간, 상환방식을 직접 입력해 월 상환액과 총 이자를 계산해보세요.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <Input
+            label="대출금액"
+            type="number"
+            value={amountMan}
+            onChange={(e) => setAmountMan(e.target.value)}
+            suffix="만원"
+          />
+          <Input
+            label="예상 금리"
+            type="number"
+            step="0.1"
+            value={rate}
+            onChange={(e) => setRate(e.target.value)}
+            suffix="%"
+          />
+          <Select
+            label="상환기간"
+            value={years}
+            onChange={(e) => setYears(e.target.value)}
+            options={YEAR_OPTIONS}
+          />
+          <Select
+            label="상환방식"
+            value={method}
+            onChange={(e) => setMethod(e.target.value as typeof method)}
+            options={METHOD_OPTIONS}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-blue-50 rounded-xl p-4 text-center">
+            <div className="text-xs text-gray-500 mb-1">
+              {method === "equal-principal" ? "월 상환액 (첫 달 기준)" : "월 상환액"}
+            </div>
+            <div className="text-xl font-bold text-blue-700">
+              {formatCurrency(Math.round(monthlyPayment / 10000) * 10000)}
+            </div>
+          </div>
+          <div className="bg-red-50 rounded-xl p-4 text-center">
+            <div className="text-xs text-gray-500 mb-1">총 이자</div>
+            <div className="text-xl font-bold text-red-600">
+              {formatCurrency(Math.round(totalInterest / 10000) * 10000)}
+            </div>
+          </div>
+          <div className="bg-gray-50 rounded-xl p-4 text-center">
+            <div className="text-xs text-gray-500 mb-1">총 납입액</div>
+            <div className="text-xl font-bold text-gray-900">
+              {formatCurrency(Math.round(totalPayment / 10000) * 10000)}
+            </div>
+          </div>
+        </div>
+
+        <p className="text-xs text-gray-400 mt-3">
+          * 원금균등 방식의 월 상환액은 첫 달 기준이며 매월 감소합니다. 만기일시상환은 만기 시 원금을 일시 상환합니다.
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -407,6 +519,9 @@ export default function ReportPage() {
             </p>
           </CardContent>
         </Card>
+
+        {/* 나만의 시뮬레이션 */}
+        <LoanSimulator defaultLoanAmount={analysis.maxLoanAmount} defaultRate={avgRate} />
 
         {/* 면책 조항 */}
         <div className="text-xs text-gray-400 bg-gray-50 rounded-lg p-4 border border-gray-200">

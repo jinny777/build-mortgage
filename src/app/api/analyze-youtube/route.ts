@@ -9,7 +9,7 @@ const openai = new OpenAI({
 
 export async function POST(req: NextRequest) {
   try {
-    const { url } = await req.json();
+    const { url, manualTranscript } = await req.json();
 
     if (!url) {
       return NextResponse.json({ error: "URL이 필요합니다." }, { status: 400 });
@@ -20,27 +20,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "유효한 유튜브 URL이 아닙니다." }, { status: 400 });
     }
 
-    // 자막 추출
-    let transcript = "";
-    let title = "";
-    try {
-      const transcriptData = await YoutubeTranscript.fetchTranscript(videoId, {
-        lang: "ko",
-      });
-      transcript = transcriptData.map((t) => t.text).join(" ");
-    } catch {
-      try {
-        const transcriptData = await YoutubeTranscript.fetchTranscript(videoId);
-        transcript = transcriptData.map((t) => t.text).join(" ");
-      } catch {
-        return NextResponse.json(
-          { error: "이 영상의 자막을 가져올 수 없습니다. 자막이 없는 영상이거나 비공개 영상일 수 있습니다." },
-          { status: 422 }
-        );
-      }
-    }
-
     // YouTube oEmbed로 제목 가져오기
+    let title = "";
     try {
       const oembedRes = await fetch(
         `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`
@@ -51,6 +32,35 @@ export async function POST(req: NextRequest) {
       }
     } catch {
       title = "제목 없음";
+    }
+
+    // 자막 추출 (사용자가 직접 붙여넣은 자막이 있으면 우선 사용)
+    let transcript = "";
+    if (manualTranscript && manualTranscript.trim().length > 0) {
+      transcript = manualTranscript.trim();
+    } else {
+      try {
+        const transcriptData = await YoutubeTranscript.fetchTranscript(videoId, {
+          lang: "ko",
+        });
+        transcript = transcriptData.map((t) => t.text).join(" ");
+      } catch {
+        try {
+          const transcriptData = await YoutubeTranscript.fetchTranscript(videoId);
+          transcript = transcriptData.map((t) => t.text).join(" ");
+        } catch {
+          return NextResponse.json(
+            {
+              error:
+                "이 영상의 자막을 자동으로 가져올 수 없습니다. 아래에 자막 텍스트를 직접 붙여넣어 주세요.",
+              videoId,
+              title,
+              needsManualTranscript: true,
+            },
+            { status: 422 }
+          );
+        }
+      }
     }
 
     // OpenAI API로 분석
